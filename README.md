@@ -13,12 +13,17 @@ Data from over **2,000 startups**, sourced from **Crunchbase**, was processed th
 **Feature contribution analysis** and **Partial Dependence Plots (PDP)** revealed that key financial variables such as **max funding** and **total VC investment** significantly impact valuations. While regularization-based models provided interpretability, they were less effective in capturing complex relationships. 
 
 
+**Feature Contribution Analysis**
 ![Image](https://github.com/user-attachments/assets/4291eb7c-ec3c-48f6-a530-f4cade6c2f5a)
 
-**Max Funding**
+**Partial Dependence Plots**
+
+**a. Max Funding**
+
 ![Image](https://github.com/user-attachments/assets/7bb1ad03-24b3-49ec-aa57-030aaa1c7584)
 
-**Total Investment from VCs**
+**b. Total Investment from VCs**
+
 ![Image](https://github.com/user-attachments/assets/8d7c4e53-9ec6-414e-9f5b-0d989672f6e0)
 
 The project concludes that ensemble models like **Random Forest** and **XGBoost** are **better suited for startup valuation**, offering more accurate and actionable insights for venture capitalists and entrepreneurs. 
