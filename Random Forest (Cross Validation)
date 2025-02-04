@@ -1,0 +1,116 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import RandomizedSearchCV, KFold
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.impute import SimpleImputer
+from sklearn.ensemble import RandomForestRegressor
+
+# Load the dataset
+data = pd.read_csv('/Users/WongYewYong/Desktop/Dissertation Code/cleaned_startups.csv')
+
+# Remove rows where 'post_money_valuation' is zero and drop unnecessary columns
+valid = data[data['post_money_valuation'] > 0]
+valid = valid.drop(columns=['pre_money_valuation', 'id'])
+
+# Convert 'created_at' to datetime and extract year, month, and day
+valid['created_at'] = pd.to_datetime(valid['created_at'], format="%Y-%m-%d %H:%M:%S")
+valid['year'] = valid['created_at'].dt.year
+valid['month'] = valid['created_at'].dt.month
+valid['day'] = valid['created_at'].dt.day
+valid = valid.drop(columns=['created_at'])
+
+# Define preprocessing for numerical features (scaling)
+numerical_features = [
+    'funding_rounds', 'funding_total_usd', 'number_of_members', 'number_of_founders',
+    'mean_funding', 'max_funding', 'crowdfunding', 'post-ipo', 'private-equity',
+    'venture', 'a', 'angel', 'b', 'c', 'convertible', 'crowd', 'crowd_equity', 'd',
+    'debt_round', 'e', 'f', 'g', 'grant', 'partial', 'post_ipo_debt', 'post_ipo_equity',
+    'private_equity', 'secondary_market', 'seed', 'unattributed', 'number of invested VCs',
+    'total investment from VCs', 'year', 'month', 'day'
+]
+numerical_transformer = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='median')),
+    ('scaler', StandardScaler())
+])
+
+# Combine preprocessing steps for numerical features only
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('num', numerical_transformer, numerical_features)
+    ])
+
+# Apply the preprocessing pipeline to the dataset
+X = valid.drop(columns=['post_money_valuation'])
+y = valid['post_money_valuation']
+
+X_preprocessed = preprocessor.fit_transform(X)
+
+# Log-transform the target variable and convert to NumPy array
+y_log_transformed = np.log10(y).to_numpy()
+
+# Define Random Forest model
+model = RandomForestRegressor(random_state=42, n_jobs=-1)
+
+# Define the parameter distribution for RandomizedSearchCV
+param_dist = {
+    'n_estimators': [500, 1000, 1500],
+    'max_depth': [None, 10, 20, 30],
+    'min_samples_split': [2, 5, 10],
+    'min_samples_leaf': [1, 2, 4],
+    'max_features': ['auto', 'sqrt', 'log2'],
+    'bootstrap': [True, False]
+}
+
+# Perform Randomized Search with Cross-Validation to find the best parameters
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+
+random_search = RandomizedSearchCV(estimator=model, param_distributions=param_dist, 
+                                   n_iter=50, cv=kf, scoring='neg_mean_squared_error', 
+                                   n_jobs=-1, verbose=2, random_state=42)
+random_search.fit(X_preprocessed, y_log_transformed)
+
+# Output the best parameters and the best score
+print(f'Best Parameters: {random_search.best_params_}')
+best_rmse = (-random_search.best_score_) ** 0.5
+print(f'Best RMSE Score from RandomizedSearch: {best_rmse}')  # RMSE is the square root of the negative mean squared error
+
+# Perform K-Fold cross-validation with the best parameters found from RandomizedSearch
+best_model = random_search.best_estimator_
+
+rmse_values = []
+r2_values = []
+
+for train_index, test_index in kf.split(X_preprocessed):
+    X_train, X_test = X_preprocessed[train_index], X_preprocessed[test_index]
+    y_train, y_test = y_log_transformed[train_index], y_log_transformed[test_index]
+    
+    best_model.fit(X_train, y_train)
+    y_pred = best_model.predict(X_test)
+    
+    # Compute RMSE for the current fold
+    rmse = mean_squared_error(y_test, y_pred, squared=False)
+    rmse_values.append(rmse)
+    
+    # Compute R² for the current fold
+    r2 = r2_score(y_test, y_pred)
+    r2_values.append(r2)
+
+# Print RMSE and R² for each fold
+for i, (rmse, r2) in enumerate(zip(rmse_values, r2_values), 1):
+    print(f'Fold {i}: RMSE = {rmse}, R² = {r2}')
+
+# Calculate and print the mean and std of RMSE and R²
+mean_rmse = np.mean(rmse_values)
+std_rmse = np.std(rmse_values)
+mean_r2 = np.mean(r2_values)
+
+# Calculate normalized RMSE
+normalized_rmse = mean_rmse / np.mean(y_log_transformed)
+
+print(f'Mean RMSE: {mean_rmse}')
+print(f'Standard Deviation of RMSE: {std_rmse}')
+print(f'Fraction of RMSE to Mean of y_test (Normalized RMSE): {normalized_rmse}')
+print(f'Mean R² Score: {mean_r2}')
